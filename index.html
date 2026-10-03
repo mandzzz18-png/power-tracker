@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Power Tracker</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#d97706"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--tx:#14181f;--mu:#667085;--ac:#d97706;--bd:#e2e5ea;--ok:#15803d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1218;--card:#1a1f29;--tx:#eef0f4;--mu:#98a2b3;--bd:#2a3140;--ac:#f59e0b;--ok:#4ade80}}
+:root[data-theme="dark"]{--bg:#0f1218;--card:#1a1f29;--tx:#eef0f4;--mu:#98a2b3;--bd:#2a3140;--ac:#f59e0b;--ok:#4ade80}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:14px}
+h1{font-size:20px;margin:4px 0 12px}
+h2{font-size:15px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}
+.stat b{display:block;font-size:20px}.stat span{color:var(--mu);font-size:12px}
+label{display:block;font-size:12px;color:var(--mu);margin:0 0 3px}
+input,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+button{padding:11px 14px;border:0;border-radius:8px;background:var(--ac);color:#111;font:inherit;font-weight:600;width:100%}
+button.sec{background:var(--bd);color:var(--tx)}
+button.x{width:auto;padding:2px 8px;background:none;color:var(--mu)}
+.row{display:flex;gap:8px;margin-bottom:8px}.row>div{flex:1}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mu);font-weight:600;font-size:11px}
+.mu{color:var(--mu);font-size:12px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;display:none}
+</style></head>
+<body><main>
+<h1>⚡ Power Tracker</h1>
+<div class="row"><div><label>From</label><input type="date" id="from"></div><div><label>To</label><input type="date" id="to"></div></div><div class="row"><button class="sec" id="thisM">This month</button><button class="sec" id="allD">All data</button></div>
+<div class="grid" id="stats"></div>
+<div class="card" style="margin-top:12px"><h2>Daily reading</h2>
+<div class="row"><div><label>Date</label><input type="date" id="d"></div></div>
+<div class="row"><div><label>Meter reading (kWh)</label><input type="number" inputmode="decimal" step="any" id="m"></div>
+<div><label>Geyser used today (kWh)</label><input type="number" inputmode="decimal" step="any" id="g"></div></div>
+<button id="saveDay">Save day</button></div>
+<div class="card"><h2>Load electricity</h2>
+<div class="row"><div><label>Date</label><input type="date" id="ld"></div></div>
+<div class="row"><div><label>Units loaded (kWh)</label><input type="number" inputmode="decimal" step="any" id="lu"></div>
+<div><label>Cost (optional)</label><input type="number" inputmode="decimal" step="any" id="lc"></div></div>
+<button id="saveLoad">Add load</button>
+<div class="wrap" style="margin-top:8px"><table id="loads"></table></div></div>
+<div class="card"><h2>Daily log</h2><div class="wrap"><table id="log"></table></div>
+<p class="mu">Usage = yesterday's reading + units loaded − today's reading. House = usage − geyser.</p></div>
+<div class="card"><h2>Month comparison</h2><div class="wrap"><table id="cmp"></table></div><p class="mu">kWh per month, for the range selected above.</p></div>
+<div class="card"><h2>Settings &amp; export</h2>
+<label>My meter reading…</label>
+<select id="mode"><option value="down">counts down (remaining units)</option><option value="up">counts up (total used)</option></select>
+<div style="height:10px"></div>
+<button id="exp">Export range to Excel</button>
+<div class="row" style="margin:8px 0 0"><button class="sec" id="bk">Backup</button><button class="sec" id="rs">Restore</button></div><input type="file" id="rf" accept=".json,application/json" hidden>
+<p class="mu">Data is stored on this phone. Tap Backup now and then and keep the file safe.</p></div>
+</main><div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const K='pt1';let S={mode:'down',days:[],loads:[]};
+try{const r=localStorage.getItem(K);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){toast('Could not save on this device')}};
+const $=id=>document.getElementById(id);
+const r2=n=>Math.round(n*100)/100;
+const f=n=>n==null?'—':String(r2(n));
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2500)}
+$('d').value=$('ld').value=today();const inR=d=>(!$('from').value||d>=$('from').value)&&(!$('to').value||d<=$('to').value);$('mode').value=S.mode;
+
+function calc(){
+  const ds=[...S.days].sort((a,b)=>a.date<b.date?-1:1);
+  return ds.map((d,i)=>{
+    let u=null;
+    if(i>0){const p=ds[i-1];
+      const ld=S.loads.filter(l=>l.date>p.date&&l.date<=d.date).reduce((s,l)=>s+l.units,0);
+      u=S.mode==='down'?p.meter+ld-d.meter:d.meter-p.meter}
+    return{...d,u,h:u==null?null:u-d.geyser}});
+}
+function monthRows(){
+  let cu=0,cg=0,ch=0;
+  return calc().filter(r=>inR(r.date)).map(r=>{
+    if(r.u!=null){cu+=r.u;cg+=r.geyser;ch+=r.h}
+    return{...r,cu,cg,ch}});
+}
+function render(){
+  renderCmp();
+  const rows=monthRows();
+  const last=rows[rows.length-1]||{cu:0,cg:0,ch:0};
+  const lm=S.loads.filter(l=>inR(l.date));
+  const lu=lm.reduce((s,l)=>s+l.units,0),lc=lm.reduce((s,l)=>s+(l.cost||0),0);
+  $('stats').innerHTML=[['Total used',r2(last.cu)+' kWh'],['Geyser',r2(last.cg)+' kWh'],['House (no geyser)',r2(last.ch)+' kWh'],['Loaded',r2(lu)+' kWh'+(lc?' · '+r2(lc):'')]]
+    .map(([a,b])=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('');
+  $('log').innerHTML='<tr><th>Date</th><th>Meter</th><th>Used</th><th>Geyser</th><th>House</th><th>Cum.</th><th>Cum. geyser</th><th>Cum. house</th><th></th></tr>'+
+    rows.slice().reverse().map(r=>`<tr><td>${r.date.slice(5)}</td><td>${f(r.meter)}</td><td>${f(r.u)}</td><td>${f(r.geyser)}</td><td>${f(r.h)}</td><td>${f(r.cu)}</td><td>${f(r.cg)}</td><td>${f(r.ch)}</td><td><button class="x" data-d="${r.date}">✕</button></td></tr>`).join('')||'<tr><td>No readings in this range</td></tr>';
+  $('loads').innerHTML=lm.length?'<tr><th>Date</th><th>Units</th><th>Cost</th><th></th></tr>'+lm.sort((a,b)=>a.date<b.date?1:-1).map(l=>`<tr><td>${l.date.slice(5)}</td><td>${f(l.units)}</td><td>${l.cost?f(l.cost):'—'}</td><td><button class="x" data-l="${l.id}">✕</button></td></tr>`).join(''):'';
+}
+function monthly(){
+  const mm={},get=k=>mm[k]=mm[k]||{k,u:0,g:0,h:0,n:0,lu:0,lc:0};
+  calc().filter(r=>inR(r.date)&&r.u!=null).forEach(r=>{const o=get(r.date.slice(0,7));o.u+=r.u;o.g+=r.geyser;o.h+=r.h;o.n++});
+  S.loads.filter(l=>inR(l.date)).forEach(l=>{const o=get(l.date.slice(0,7));o.lu+=l.units;o.lc+=l.cost||0});
+  return Object.values(mm).sort((a,b)=>a.k<b.k?-1:1);
+}
+const MH=['Month','Days','Used (kWh)','Geyser (kWh)','House excl. geyser (kWh)','Avg per day (kWh)','Units loaded (kWh)','Cost'];
+const mrow=o=>[o.k,o.n,r2(o.u),r2(o.g),r2(o.h),o.n?r2(o.u/o.n):'',r2(o.lu),o.lc?r2(o.lc):''];
+function renderCmp(){
+  const ms=monthly();
+  $('cmp').innerHTML=ms.length?'<tr><th>Month</th><th>Used</th><th>Geyser</th><th>House</th><th>Avg/day</th><th>Loaded</th></tr>'+ms.map(o=>`<tr><td>${o.k}</td><td>${r2(o.u)}</td><td>${r2(o.g)}</td><td>${r2(o.h)}</td><td>${o.n?r2(o.u/o.n):'—'}</td><td>${r2(o.lu)}</td></tr>`).join(''):'<tr><td>No data yet</td></tr>';
+}
+function fill(){const e=S.days.find(x=>x.date===$('d').value);$('m').value=e?e.meter:'';$('g').value=e?e.geyser:''}
+$('d').onchange=fill;$('from').onchange=$('to').onchange=render;
+$('allD').onclick=()=>{$('from').value=$('to').value='';render()};
+$('thisM').onclick=()=>{const t=today();$('from').value=t.slice(0,7)+'-01';$('to').value='';render()};
+$('mode').onchange=()=>{S.mode=$('mode').value;save();render()};
+$('saveDay').onclick=()=>{
+  const date=$('d').value,meter=parseFloat($('m').value),geyser=parseFloat($('g').value);
+  if(!date||isNaN(meter)||isNaN(geyser))return toast('Enter date, meter and geyser');
+  S.days=S.days.filter(x=>x.date!==date);S.days.push({date,meter,geyser});save();
+  render();toast('Saved')};
+$('saveLoad').onclick=()=>{
+  const date=$('ld').value,units=parseFloat($('lu').value),cost=parseFloat($('lc').value)||0;
+  if(!date||isNaN(units))return toast('Enter date and units');
+  S.loads.push({id:Date.now(),date,units,cost});save();$('lu').value=$('lc').value='';
+  render();toast('Load added')};
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.dataset.d&&confirm('Delete '+t.dataset.d+'?')){S.days=S.days.filter(x=>x.date!==t.dataset.d);save();render()}
+  if(t.dataset.l&&confirm('Delete this load?')){S.loads=S.loads.filter(x=>String(x.id)!==t.dataset.l);save();render()}
+});
+function download(name,data){const b=new Blob([data],{type:'application/octet-stream'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+$('bk').onclick=()=>download('power-tracker-backup-'+today()+'.json',JSON.stringify(S));
+$('rs').onclick=()=>$('rf').click();
+$('rf').onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());if(!Array.isArray(j.days)||!Array.isArray(j.loads))throw 0;if(!confirm('Replace current data with this backup?'))return;S=Object.assign({mode:'down'},j);save();$('mode').value=S.mode;render();toast('Restored')}catch(x){toast('Not a valid backup')}e.target.value=''};
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+$('exp').onclick=async()=>{
+  const rows=monthRows(),m=($('from').value||rows[0]?.date||'all')+(($('to').value||rows.length&&rows[rows.length-1].date)?'_to_'+($('to').value||rows[rows.length-1].date):'');
+  if(!rows.length)return toast('No readings in this range');
+  const head=['Date','Meter reading','Used (kWh)','Geyser (kWh)','House excl. geyser (kWh)','Cumulative used','Cumulative geyser','Cumulative house'];
+  const aoa=[head,...rows.map(r=>[r.date,r.meter,r.u==null?'':r2(r.u),r.geyser,r.h==null?'':r2(r.h),r2(r.cu),r2(r.cg),r2(r.ch)])];
+  const la=[['Date','Units loaded (kWh)','Cost'],...S.loads.filter(l=>inR(l.date)).sort((a,b)=>a.date<b.date?-1:1).map(l=>[l.date,l.units,l.cost||''])];
+  try{
+    let data,name;
+    if(window.XLSX){const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([MH,...monthly().map(mrow)]),'Monthly summary');
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Daily');
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(la),'Loads');
+      data=XLSX.write(wb,{type:'array',bookType:'xlsx'});name='electricity-'+m+'.xlsx'}
+    else{data=aoa.map(r=>r.join(',')).join('\n');name='electricity-'+m+'.csv'}
+    download(name,data);toast('Exported')
+  }catch(e){toast('Export failed')}
+};
+fill();render();
+</script></body></html>
