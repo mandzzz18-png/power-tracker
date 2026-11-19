@@ -32,15 +32,18 @@ th:first-child,td:first-child{text-align:left}
 th{color:var(--mu);font-weight:600;font-size:11px}
 .mu{color:var(--mu);font-size:12px}
 #cmp2{font-size:12px}#cmp2 th,#cmp2 td{padding:6px 4px}#cmp2 td:first-child{white-space:normal;max-width:105px}
+main{padding-bottom:90px}#stats{margin-bottom:12px}
+section{display:none}section.on{display:block}
+#tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+#tabs button{flex:1;background:none;color:var(--mu);border-radius:0;padding:8px 2px 7px;font-size:11px;font-weight:600}
+#tabs button i{display:block;font-style:normal;font-size:18px;line-height:1.2}
+#tabs button.on{color:var(--ac)}
 summary{color:var(--mu);font-size:13px;margin:6px 0}
-#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;display:none}
+#toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;display:none}
 </style></head>
 <body><main>
 <h1>⚡ Power Tracker</h1>
-<div class="row"><button id="vAll" class="sec on">Cumulative (all)</button><button id="vMon" class="sec">Single month</button></div>
-<div class="row" id="mon" style="display:none"><div><label>Month</label><input type="month" id="month"></div></div>
-<div class="mu" id="sc" style="margin:0 0 6px"></div>
-<div class="grid" id="stats"></div>
+<section data-tab="add">
 <div class="card" style="margin-top:12px"><h2>Reading</h2>
 <div class="row"><div><label>Date &amp; time</label><input type="datetime-local" id="d"></div></div>
 <div class="row"><div><label>Meter reading (kWh)</label><input type="number" inputmode="decimal" step="any" id="m"></div>
@@ -54,22 +57,36 @@ summary{color:var(--mu);font-size:13px;margin:6px 0}
 <label class="chk"><input type="checkbox" id="lin"> My latest reading already shows these units (ignores the time above)</label>
 <button id="saveLoad">Add load</button>
 <div class="wrap" style="margin-top:8px"><table id="loads"></table></div></div>
+</section>
+<section data-tab="stats">
+<div class="row"><button id="vAll" class="sec on">Cumulative (all)</button><button id="vMon" class="sec">Single month</button></div>
+<div class="row" id="mon" style="display:none"><div><label>Month</label><input type="month" id="month"></div></div>
+<div class="mu" id="sc" style="margin:0 0 6px"></div>
+<div class="grid" id="stats"></div>
 <div class="card"><h2>Daily log</h2><div class="wrap"><table id="log"></table></div>
 <p class="mu">Usage = previous reading + units loaded in between − this reading. House = usage − geyser. Usage between two readings is counted on the day of the later one.</p>
 <details><summary>Individual readings</summary><div class="wrap"><table id="ent"></table></div></details></div>
+</section>
+<section data-tab="cmp">
 <div class="card"><h2>Month comparison</h2><div class="wrap"><table id="cmp"></table></div><p class="mu">kWh per month, all data.</p></div>
-<div class="card"><h2>Compare two months</h2>
+<div class="card"><h2>Compare two months, day by day</h2>
 <div class="row"><div><label>Month A</label><select id="cA"></select></div><div><label>Month B</label><select id="cB"></select></div></div>
-<div class="wrap"><table id="cmp2"></table></div>
+<div class="row"><div><label>Compare</label><select id="cM"><option value="u">Total used</option><option value="h">House (no geyser)</option><option value="geyser">Geyser</option></select></div></div>
+<div class="wrap" style="max-height:360px;overflow-y:auto"><table id="cmpd"></table></div>
+<details><summary>Month totals and averages</summary><div class="wrap"><table id="cmp2"></table></div></details>
 <svg id="chart" viewBox="0 0 320 170" width="100%" role="img" aria-label="Daily usage by day of month" style="margin-top:10px"></svg>
-<p class="mu">Chart: kWh used per day, by day of the month. Averages per day are the fairest comparison when months have different numbers of days with readings.</p></div>
+<p class="mu">Chart and table: kWh per day, matched by day of the month, for the item chosen above. Averages per day are the fairest comparison when months have different numbers of days with readings.</p></div>
+</section>
+<section data-tab="set">
 <div class="card"><h2>Settings &amp; export</h2>
 <label>My meter reading…</label>
 <select id="mode"><option value="down">counts down (remaining units)</option><option value="up">counts up (total used)</option></select>
 <div style="height:10px"></div>
 <button id="exp">Export to Excel</button>
 <div class="row" style="margin:8px 0 0"><button class="sec" id="bk">Backup</button><button class="sec" id="rs">Import data</button></div><input type="file" id="rf" accept=".json,.xlsx,.xls,.csv,application/json" hidden>
-<p class="mu">Export uses what is showing above (all data or the chosen month). Data is stored on this phone. Tap Backup now and then and keep the file safe. Import adds data from a Backup file or an earlier Excel/CSV export without deleting what is already here.</p></div>
+<p class="mu">Export uses the view chosen on the Stats tab (all data or one month). Data is stored on this phone. Tap Backup now and then and keep the file safe. Import adds data from a Backup file or an earlier Excel/CSV export without deleting what is already here.</p></div>
+</section>
+<nav id="tabs"><button data-go="add"><i>➕</i>Add</button><button data-go="stats"><i>📊</i>Stats</button><button data-go="cmp"><i>⚖️</i>Compare</button><button data-go="set"><i>⚙️</i>Settings</button></nav>
 </main><div id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -115,7 +132,8 @@ const MH=['Month','Days','Used (kWh)','Geyser (kWh)','House excl. geyser (kWh)',
 const mrow=o=>[o.k,o.n,r2(o.u),r2(o.g),r2(o.h),o.n?r2(o.u/o.n):'',r2(o.lu),o.lc?r2(o.lc):''];
 const tt=ts=>ts.slice(5,10)+' '+ts.slice(11);
 
-function dayUse(k){const m={};calc().filter(r=>r.u!=null&&r.date.startsWith(k)).forEach(r=>{const d=+r.date.slice(8);m[d]=(m[d]||0)+r.u});return m}
+function dayUse(k){const f=$('cM').value,m={};calc().filter(r=>r.u!=null&&r.date.startsWith(k)).forEach(r=>{const d=+r.date.slice(8);m[d]=(m[d]||0)+(f==='u'?r.u:f==='h'?r.h:r.geyser)});return m}
+function dayCmp(c){const A=dayUse(c.a),B=dayUse(c.b),out=[];for(let d=1;d<=31;d++){if(A[d]==null&&B[d]==null)continue;out.push([d,A[d],B[d]])}return out}
 function cmpData(){
   const ms=monthly(),a=ms.find(o=>o.k===$('cA').value),b=ms.find(o=>o.k===$('cB').value);
   if(!a||!b)return null;
@@ -135,6 +153,9 @@ function renderCmp2(){
   $('cmp2').innerHTML=`<tr><th></th><th>${c.a}</th><th>${c.b}</th><th>Change</th><th>%</th></tr>`+c.rows.map(([n,x,y])=>{
     const d=y-x,p=x?d/x*100:null;
     return `<tr><td>${n}</td><td>${r2(x)}</td><td>${r2(y)}</td><td>${d>0?'+':''}${r2(d)}</td><td>${p==null?'—':(p>0?'+':'')+Math.round(p)+'%'}</td></tr>`}).join('');
+  const dc=dayCmp(c),sa=dc.reduce((t,r)=>t+(r[1]||0),0),sb=dc.reduce((t,r)=>t+(r[2]||0),0);
+  const ch=(x,y)=>x==null||y==null?'—':(y-x>0?'+':'')+r2(y-x);
+  $('cmpd').innerHTML=`<tr><th>Day</th><th>${c.a}</th><th>${c.b}</th><th>Change</th></tr><tr><td><b>Total</b></td><td><b>${r2(sa)}</b></td><td><b>${r2(sb)}</b></td><td><b>${ch(sa,sb)}</b></td></tr>`+dc.map(([d,x,y])=>`<tr><td>${d}</td><td>${x==null?'—':r2(x)}</td><td>${y==null?'—':r2(y)}</td><td>${ch(x,y)}</td></tr>`).join('');
   const A=dayUse(c.a),B=dayUse(c.b),W=320,H=170,L=30,R=8,T=12,Bm=26;
   const mx=Math.max(1,...Object.values(A),...Object.values(B))*1.1;
   const X=d=>L+(d-1)*(W-L-R)/30,Y=v=>H-Bm-(v/mx)*(H-Bm-T);
@@ -163,7 +184,7 @@ function render(){
   $('cmp').innerHTML=ms.length?'<tr><th>Month</th><th>Used</th><th>Geyser</th><th>House</th><th>Avg/day</th><th>Loaded</th></tr>'+ms.map(o=>`<tr><td>${o.k}</td><td>${r2(o.u)}</td><td>${r2(o.g)}</td><td>${r2(o.h)}</td><td>${o.n?r2(o.u/o.n):'—'}</td><td>${r2(o.lu)}</td></tr>`).join(''):'<tr><td>No data yet</td></tr>';
 }
 function fill(){const e=S.days.find(x=>x.ts===$('d').value);$('m').value=e?e.meter:'';$('g').value=e?e.geyser:''}
-$('cA').onchange=$('cB').onchange=renderCmp2;
+$('cA').onchange=$('cB').onchange=$('cM').onchange=renderCmp2;
 $('d').onchange=fill;$('month').onchange=render;
 $('vAll').onclick=()=>{view='all';render()};
 $('vMon').onclick=()=>{view='month';render()};
@@ -239,12 +260,20 @@ $('exp').onclick=()=>{
     let data,name;
     const tag=view==='all'?'all':$('month').value;
     if(window.XLSX){const wb=XLSX.utils.book_new(),add=(a,n)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),n);
-      add([MH,...monthly().map(mrow)],'Monthly summary');const cd=cmpData();if(cd)add([['',cd.a,cd.b,'Change'],...cd.rows.map(([n,x,y])=>[n,r2(x),r2(y),r2(y-x)])],'Compare');add(daily,'Daily');add(ent,'Readings');add(la,'Loads');
+      add([MH,...monthly().map(mrow)],'Monthly summary');const cd=cmpData();if(cd)add([['',cd.a,cd.b,'Change'],...cd.rows.map(([n,x,y])=>[n,r2(x),r2(y),r2(y-x)])],'Compare');if(cd){const dc=dayCmp(cd);add([['Day',cd.a,cd.b,'Change'],...dc.map(([d,x,y])=>[d,x==null?'':r2(x),y==null?'':r2(y),x==null||y==null?'':r2(y-x)])],'Compare days')}add(daily,'Daily');add(ent,'Readings');add(la,'Loads');
       data=XLSX.write(wb,{type:'array',bookType:'xlsx'});name='electricity-'+tag+'.xlsx'}
     else{data=daily.map(r=>r.join(',')).join('\n');name='electricity-'+tag+'.csv'}
     download(name,data);toast('Exported')
   }catch(e){toast('Export failed')}
 };
+function go(t){
+  document.querySelectorAll('section').forEach(e=>e.classList.toggle('on',e.dataset.tab===t));
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.go===t));
+  window.scrollTo(0,0);try{localStorage.setItem('pt-tab',t)}catch(e){}}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>go(b.dataset.go));
+let t0='add';try{t0=localStorage.getItem('pt-tab')||'add'}catch(e){}
+if(!document.querySelector('section[data-tab="'+t0+'"]'))t0='add';
+go(t0);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 fill();render();
 </script></body></html>
