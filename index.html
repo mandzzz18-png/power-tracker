@@ -17,6 +17,7 @@ h2{font-size:15px;margin:0 0 10px}
 .stat{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}
 .stat b{display:block;font-size:20px}.stat span{color:var(--mu);font-size:12px}
 label{display:block;font-size:12px;color:var(--mu);margin:0 0 3px}
+textarea{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;resize:vertical}
 input,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
 button{padding:11px 14px;border:0;border-radius:8px;background:var(--ac);color:#111;font:inherit;font-weight:600;width:100%}
 button.sec{background:var(--bd);color:var(--tx)}
@@ -50,6 +51,12 @@ summary{color:var(--mu);font-size:13px;margin:6px 0}
 <div><label>Geyser since last reading (kWh) – optional</label><input type="number" inputmode="decimal" step="any" id="g" placeholder="leave blank if none"></div></div>
 <button id="saveDay">Save reading</button>
 <p class="mu">Add as many readings per day as you like (e.g. morning and evening). They all count as one day. Leave the geyser box empty if you don't have a reading for it. It is then counted as 0, so house usage equals total usage.</p></div>
+<div class="card"><h2>Day note</h2>
+<div class="row"><div><label>Date</label><input type="date" id="nd"></div></div>
+<label>Why was use unusual? (power outage, guests, geyser left on…)</label>
+<textarea id="nt" rows="3" maxlength="300" placeholder="e.g. Power outage 14:00–18:00"></textarea>
+<div style="height:8px"></div><button id="saveNote">Save note</button>
+<p class="mu">One note per day. Saving an empty note removes it. Notes show in the Stats and Compare tabs and in the Excel export.</p></div>
 <div class="card"><h2>Load electricity</h2>
 <div class="row"><div><label>Date &amp; time loaded</label><input type="datetime-local" id="ld"></div></div>
 <div class="row"><div><label>Units loaded (kWh)</label><input type="number" inputmode="decimal" step="any" id="lu"></div>
@@ -63,6 +70,7 @@ summary{color:var(--mu);font-size:13px;margin:6px 0}
 <div class="row" id="mon" style="display:none"><div><label>Month</label><input type="month" id="month"></div></div>
 <div class="mu" id="sc" style="margin:0 0 6px"></div>
 <div class="grid" id="stats"></div>
+<div class="card"><h2>Notes</h2><div class="wrap"><table id="notes"></table></div><p class="mu">Tap a date to edit its note.</p></div>
 <div class="card"><h2>Daily log</h2><div class="wrap"><table id="log"></table></div>
 <p class="mu">Usage = previous reading + units loaded in between − this reading. House = usage − geyser. Usage between two readings is counted on the day of the later one.</p>
 <details><summary>Individual readings</summary><div class="wrap"><table id="ent"></table></div></details></div>
@@ -90,7 +98,7 @@ summary{color:var(--mu);font-size:13px;margin:6px 0}
 </main><div id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-const K='pt1';let S={mode:'down',days:[],loads:[]};
+const K='pt1';let S={mode:'down',days:[],loads:[],notes:{}};
 try{const r=localStorage.getItem(K);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){toast('Could not save on this device')}};
 const $=id=>document.getElementById(id);
@@ -99,7 +107,7 @@ const f=n=>n==null?'—':String(r2(n));
 const pad=n=>String(n).padStart(2,'0');
 const now=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes())};
 function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2500)}
-function migrate(){S.days.forEach(x=>{if(!x.ts)x.ts=x.date+'T20:00'});S.loads.forEach(x=>{if(!x.ts)x.ts=x.date+'T00:00'})}
+function migrate(){S.notes=S.notes||{};S.days.forEach(x=>{if(!x.ts)x.ts=x.date+'T20:00'});S.loads.forEach(x=>{if(!x.ts)x.ts=x.date+'T00:00'})}
 migrate();
 let view='all';
 $('d').value=$('ld').value=now();$('month').value=now().slice(0,7);$('mode').value=S.mode;
@@ -130,10 +138,14 @@ function monthly(){
 }
 const MH=['Month','Days','Used (kWh)','Geyser (kWh)','House excl. geyser (kWh)','Avg per day (kWh)','Units loaded (kWh)','Cost'];
 const mrow=o=>[o.k,o.n,r2(o.u),r2(o.g),r2(o.h),o.n?r2(o.u/o.n):'',r2(o.lu),o.lc?r2(o.lc):''];
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const noteRow=(d,n)=>S.notes[d]?`<tr><td colspan="${n}" class="mu" style="text-align:left;white-space:normal">📝 ${esc(S.notes[d])}</td></tr>`:'';
 const tt=ts=>ts.slice(5,10)+' '+ts.slice(11);
 
 function dayUse(k){const f=$('cM').value,m={};calc().filter(r=>r.u!=null&&r.date.startsWith(k)).forEach(r=>{const d=+r.date.slice(8);m[d]=(m[d]||0)+(f==='u'?r.u:f==='h'?r.h:r.geyser)});return m}
-function dayCmp(c){const A=dayUse(c.a),B=dayUse(c.b),out=[];for(let d=1;d<=31;d++){if(A[d]==null&&B[d]==null)continue;out.push([d,A[d],B[d]])}return out}
+let CK=['',''],cTouched=false;
+const cnote=d=>{const p=n=>S.notes[n+'-'+pad(d)],a=p(CK[0]),b=p(CK[1]);return a||b?`<tr><td colspan="4" class="mu" style="text-align:left;white-space:normal">📝 ${a?CK[0]+': '+esc(a):''}${a&&b?' · ':''}${b?CK[1]+': '+esc(b):''}</td></tr>`:''};
+function dayCmp(c){CK=[c.a,c.b];const A=dayUse(c.a),B=dayUse(c.b),out=[];for(let d=1;d<=31;d++){if(A[d]==null&&B[d]==null)continue;out.push([d,A[d],B[d]])}return out}
 function cmpData(){
   const ms=monthly(),a=ms.find(o=>o.k===$('cA').value),b=ms.find(o=>o.k===$('cB').value);
   if(!a||!b)return null;
@@ -146,8 +158,8 @@ function renderCmp2(){
   const ms=monthly().map(o=>o.k),pa=$('cA').value,pb=$('cB').value;
   const opts=ms.map(k=>`<option>${k}</option>`).join('');
   $('cA').innerHTML=opts;$('cB').innerHTML=opts;
-  $('cA').value=ms.includes(pa)?pa:(ms[ms.length-2]||ms[0]||'');
-  $('cB').value=ms.includes(pb)?pb:(ms[ms.length-1]||'');
+  $('cA').value=cTouched&&ms.includes(pa)?pa:(ms[ms.length-2]||ms[0]||'');
+  $('cB').value=cTouched&&ms.includes(pb)?pb:(ms[ms.length-1]||'');
   const c=cmpData();
   if(!c){$('cmp2').innerHTML='<tr><td>Add readings in at least one month</td></tr>';$('chart').innerHTML='';return}
   $('cmp2').innerHTML=`<tr><th></th><th>${c.a}</th><th>${c.b}</th><th>Change</th><th>%</th></tr>`+c.rows.map(([n,x,y])=>{
@@ -155,7 +167,7 @@ function renderCmp2(){
     return `<tr><td>${n}</td><td>${r2(x)}</td><td>${r2(y)}</td><td>${d>0?'+':''}${r2(d)}</td><td>${p==null?'—':(p>0?'+':'')+Math.round(p)+'%'}</td></tr>`}).join('');
   const dc=dayCmp(c),sa=dc.reduce((t,r)=>t+(r[1]||0),0),sb=dc.reduce((t,r)=>t+(r[2]||0),0);
   const ch=(x,y)=>x==null||y==null?'—':(y-x>0?'+':'')+r2(y-x);
-  $('cmpd').innerHTML=`<tr><th>Day</th><th>${c.a}</th><th>${c.b}</th><th>Change</th></tr><tr><td><b>Total</b></td><td><b>${r2(sa)}</b></td><td><b>${r2(sb)}</b></td><td><b>${ch(sa,sb)}</b></td></tr>`+dc.map(([d,x,y])=>`<tr><td>${d}</td><td>${x==null?'—':r2(x)}</td><td>${y==null?'—':r2(y)}</td><td>${ch(x,y)}</td></tr>`).join('');
+  $('cmpd').innerHTML=`<tr><th>Day</th><th>${c.a}</th><th>${c.b}</th><th>Change</th></tr><tr><td><b>Total</b></td><td><b>${r2(sa)}</b></td><td><b>${r2(sb)}</b></td><td><b>${ch(sa,sb)}</b></td></tr>`+dc.map(([d,x,y])=>`<tr><td>${d}</td><td>${x==null?'—':r2(x)}</td><td>${y==null?'—':r2(y)}</td><td>${ch(x,y)}</td></tr>${cnote(d)}`).join('');
   const A=dayUse(c.a),B=dayUse(c.b),W=320,H=170,L=30,R=8,T=12,Bm=26;
   const mx=Math.max(1,...Object.values(A),...Object.values(B))*1.1;
   const X=d=>L+(d-1)*(W-L-R)/30,Y=v=>H-Bm-(v/mx)*(H-Bm-T);
@@ -176,15 +188,22 @@ function render(){
   $('stats').innerHTML=[['Total used',r2(last.cu)+' kWh'],['Geyser',r2(last.cg)+' kWh'],['House (no geyser)',r2(last.ch)+' kWh'],['Loaded',r2(lu)+' kWh'+(lc?' · '+r2(lc):'')]]
     .map(([a,b])=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('');
   $('log').innerHTML='<tr><th>Date</th><th>Reads</th><th>Used</th><th>Geyser</th><th>House</th><th>Cum.</th><th>Cum. geyser</th><th>Cum. house</th></tr>'+
-    (days.slice().reverse().map(o=>`<tr><td>${o.date.slice(5)}</td><td>${o.n}</td><td>${o.has?f(o.u):'—'}</td><td>${o.has?f(o.g):'—'}</td><td>${o.has?f(o.h):'—'}</td><td>${f(o.cu)}</td><td>${f(o.cg)}</td><td>${f(o.ch)}</td></tr>`).join('')||'<tr><td>No readings here yet</td></tr>');
+    (days.slice().reverse().map(o=>`<tr><td>${o.date.slice(5)}</td><td>${o.n}</td><td>${o.has?f(o.u):'—'}</td><td>${o.has?f(o.g):'—'}</td><td>${o.has?f(o.h):'—'}</td><td>${f(o.cu)}</td><td>${f(o.cg)}</td><td>${f(o.ch)}</td></tr>${noteRow(o.date,8)}`).join('')||'<tr><td>No readings here yet</td></tr>');
   const es=calc().filter(r=>inR(r.date)).reverse();
   $('ent').innerHTML=es.length?'<tr><th>Time</th><th>Meter</th><th>Geyser</th><th>Used</th><th></th></tr>'+es.map(r=>`<tr><td>${tt(r.ts)}</td><td>${f(r.meter)}</td><td>${f(r.geyser)}</td><td>${f(r.u)}</td><td><button class="x" data-t="${r.ts}">✕</button></td></tr>`).join(''):'';
   $('loads').innerHTML=lm.length?'<tr><th>Time</th><th>Units</th><th>Cost</th><th></th></tr>'+lm.map(l=>`<tr><td>${tt(l.ts)}</td><td>${f(l.units)}</td><td>${l.cost?f(l.cost):'—'}</td><td><button class="x" data-l="${l.id}">✕</button></td></tr>`).join(''):'';
+  const nd=Object.keys(S.notes).filter(inR).sort().reverse();
+  $('notes').innerHTML=nd.length?nd.map(d=>`<tr><td data-e="${d}" style="color:var(--ac)">${d.slice(5)}</td><td style="text-align:left;white-space:normal">${esc(S.notes[d])}</td><td><button class="x" data-n="${d}">✕</button></td></tr>`).join(''):'<tr><td>No notes in this view</td></tr>';
   const ms=monthly();
   $('cmp').innerHTML=ms.length?'<tr><th>Month</th><th>Used</th><th>Geyser</th><th>House</th><th>Avg/day</th><th>Loaded</th></tr>'+ms.map(o=>`<tr><td>${o.k}</td><td>${r2(o.u)}</td><td>${r2(o.g)}</td><td>${r2(o.h)}</td><td>${o.n?r2(o.u/o.n):'—'}</td><td>${r2(o.lu)}</td></tr>`).join(''):'<tr><td>No data yet</td></tr>';
 }
 function fill(){const e=S.days.find(x=>x.ts===$('d').value);$('m').value=e?e.meter:'';$('g').value=e?e.geyser:''}
-$('cA').onchange=$('cB').onchange=$('cM').onchange=renderCmp2;
+$('cA').onchange=$('cB').onchange=()=>{cTouched=true;renderCmp2()};$('cM').onchange=renderCmp2;
+$('nd').value=now().slice(0,10);
+function fillNote(){$('nt').value=S.notes[$('nd').value]||''}
+$('nd').onchange=fillNote;
+$('saveNote').onclick=()=>{const d=$('nd').value,t=$('nt').value.trim();if(!d)return toast('Pick a date');
+  if(t)S.notes[d]=t;else delete S.notes[d];save();render();toast(t?'Note saved':'Note removed')};
 $('d').onchange=fill;$('month').onchange=render;
 $('vAll').onclick=()=>{view='all';render()};
 $('vMon').onclick=()=>{view='month';render()};
@@ -207,6 +226,8 @@ $('saveLoad').onclick=()=>{
 document.addEventListener('click',e=>{
   const t=e.target;
   if(t.dataset.t&&confirm('Delete reading '+tt(t.dataset.t)+'?')){S.days=S.days.filter(x=>x.ts!==t.dataset.t);save();render()}
+  if(t.dataset.n&&confirm('Delete the note for '+t.dataset.n+'?')){delete S.notes[t.dataset.n];save();fillNote();render()}
+  if(t.dataset.e){$('nd').value=t.dataset.e;fillNote();go('add');$('nt').focus()}
   if(t.dataset.l&&confirm('Delete this load?')){S.loads=S.loads.filter(x=>String(x.id)!==t.dataset.l);save();render()}
 });
 function download(name,data){const b=new Blob([data],{type:'application/octet-stream'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
@@ -219,16 +240,17 @@ function pts(v){
   return m?m[1]+'-'+m[2]+'-'+m[3]+'T'+(m[4]?pad(+m[4]):'20')+':'+(m[5]||'00'):null}
 const num=v=>{const n=parseFloat(String(v).replace(',','.'));return isNaN(n)?null:n};
 function fromSheets(wb){
-  const out={days:[],loads:[]};
+  const out={days:[],loads:[],notes:{}};
   wb.SheetNames.forEach(nm=>{
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:true,defval:''});
     if(!rows.length)return;
     const h=rows[0].map(x=>String(x).toLowerCase());
     const col=t=>h.findIndex(x=>x.includes(t));
-    const cD=h.findIndex(x=>x.startsWith('date')),cM=col('meter'),cG=col('geyser'),cU=col('units');
+    const cN=h.findIndex(x=>x==='note'),cD=h.findIndex(x=>x.startsWith('date')),cM=col('meter'),cG=col('geyser'),cU=col('units');
     if(cD<0)return;
     rows.slice(1).forEach(r=>{
       let ts=pts(r[cD]);if(!ts)return;
+      if(cN>=0&&r[cN]!==''&&r[cN]!=null)out.notes[ts.slice(0,10)]=String(r[cN]);
       if(cU>=0){const u=num(r[cU]);if(u!=null)out.loads.push({id:Date.now()+out.loads.length,ts:ts.length&&String(r[cD]).length<=10?ts.slice(0,11)+'00:00':ts,units:u,cost:num(r[col('cost')])||0})}
       else if(cM>=0){const m=num(r[cM]);if(m!=null)out.days.push({ts,meter:m,geyser:cG>=0?(num(r[cG])||0):0})}
     })});
@@ -238,6 +260,7 @@ function merge(j){
   (j.days||[]).forEach(x=>{if(!x.ts&&x.date)x.ts=x.date+'T20:00';if(!x.ts||isNaN(x.meter))return;S.days=S.days.filter(y=>y.ts!==x.ts);S.days.push({ts:x.ts,meter:+x.meter,geyser:+x.geyser||0});a++});
   (j.loads||[]).forEach(x=>{if(!x.ts&&x.date)x.ts=x.date+'T00:00';if(!x.ts||isNaN(x.units))return;
     if(S.loads.some(y=>y.ts===x.ts&&y.units===+x.units))return;S.loads.push({id:Date.now()+l,ts:x.ts,units:+x.units,cost:+x.cost||0});l++});
+  Object.entries(j.notes||{}).forEach(([d,t])=>{if(t&&!S.notes[d]){S.notes[d]=String(t);a++}});
   return [a,l]}
 $('rf').onchange=async e=>{
   const file=e.target.files[0];e.target.value='';if(!file)return;
@@ -245,22 +268,22 @@ $('rf').onchange=async e=>{
     let j;
     if(/\.json$/i.test(file.name)){j=JSON.parse(await file.text());if(j.mode&&!S.days.length)S.mode=j.mode}
     else{if(!window.XLSX)return toast('Excel import needs a connection the first time');j=fromSheets(XLSX.read(await file.arrayBuffer(),{type:'array'}))}
-    if(!(j.days||[]).length&&!(j.loads||[]).length)throw 0;
-    if(!confirm('Add '+(j.days||[]).length+' readings and '+(j.loads||[]).length+' loads from this file? Existing data is kept.'))return;
+    if(!(j.days||[]).length&&!(j.loads||[]).length&&!Object.keys(j.notes||{}).length)throw 0;
+    if(!confirm('Add '+(j.days||[]).length+' readings, '+(j.loads||[]).length+' loads and '+Object.keys(j.notes||{}).length+' notes from this file? Existing data is kept.'))return;
     const [a,l]=merge(j);migrate();save();$('mode').value=S.mode;render();toast('Imported '+a+' readings, '+l+' loads')
   }catch(x){toast('Could not read that file')}
 };
 $('exp').onclick=()=>{
   const days=dayRows(),es=calc().filter(r=>inR(r.date));
   if(!es.length)return toast('No readings to export');
-  const daily=[['Date','Readings','Used (kWh)','Geyser (kWh)','House excl. geyser (kWh)','Cumulative used','Cumulative geyser','Cumulative house'],...days.map(o=>[o.date,o.n,o.has?r2(o.u):'',o.has?r2(o.g):'',o.has?r2(o.h):'',r2(o.cu),r2(o.cg),r2(o.ch)])];
+  const daily=[['Date','Readings','Used (kWh)','Geyser (kWh)','House excl. geyser (kWh)','Cumulative used','Cumulative geyser','Cumulative house','Note'],...days.map(o=>[o.date,o.n,o.has?r2(o.u):'',o.has?r2(o.g):'',o.has?r2(o.h):'',r2(o.cu),r2(o.cg),r2(o.ch),S.notes[o.date]||''])];
   const ent=[['Date & time','Meter reading','Geyser (kWh)','Used (kWh)','House excl. geyser (kWh)'],...es.map(r=>[r.ts.replace('T',' '),r.meter,r.geyser,r.u==null?'':r2(r.u),r.h==null?'':r2(r.h)])];
   const la=[['Date & time','Units loaded (kWh)','Cost'],...S.loads.filter(l=>inR(l.ts)).sort((a,b)=>a.ts<b.ts?-1:1).map(l=>[l.ts.replace('T',' '),l.units,l.cost||''])];
   try{
     let data,name;
     const tag=view==='all'?'all':$('month').value;
     if(window.XLSX){const wb=XLSX.utils.book_new(),add=(a,n)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),n);
-      add([MH,...monthly().map(mrow)],'Monthly summary');const cd=cmpData();if(cd)add([['',cd.a,cd.b,'Change'],...cd.rows.map(([n,x,y])=>[n,r2(x),r2(y),r2(y-x)])],'Compare');if(cd){const dc=dayCmp(cd);add([['Day',cd.a,cd.b,'Change'],...dc.map(([d,x,y])=>[d,x==null?'':r2(x),y==null?'':r2(y),x==null||y==null?'':r2(y-x)])],'Compare days')}add(daily,'Daily');add(ent,'Readings');add(la,'Loads');
+      add([MH,...monthly().map(mrow)],'Monthly summary');const cd=cmpData();if(cd)add([['',cd.a,cd.b,'Change'],...cd.rows.map(([n,x,y])=>[n,r2(x),r2(y),r2(y-x)])],'Compare');if(cd){const dc=dayCmp(cd);add([['Day',cd.a,cd.b,'Change'],...dc.map(([d,x,y])=>[d,x==null?'':r2(x),y==null?'':r2(y),x==null||y==null?'':r2(y-x)])],'Compare days')}add(daily,'Daily');add([['Date','Note'],...Object.keys(S.notes).filter(inR).sort().map(d=>[d,S.notes[d]])],'Notes');add(ent,'Readings');add(la,'Loads');
       data=XLSX.write(wb,{type:'array',bookType:'xlsx'});name='electricity-'+tag+'.xlsx'}
     else{data=daily.map(r=>r.join(',')).join('\n');name='electricity-'+tag+'.csv'}
     download(name,data);toast('Exported')
